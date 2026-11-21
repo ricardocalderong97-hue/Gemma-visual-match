@@ -1,85 +1,318 @@
 # Gemma Agent Studio
 
-Interfaz en español para tres agentes de un backend Python existente con Ollama y Gemma 3:1b. No incluye generación de respuestas, autenticación, base de datos ni APIs comerciales. Los historiales independientes viven únicamente en memoria y se pierden al recargar o cerrar la pestaña.
+Interfaz web para utilizar tres funcionalidades implementadas en Python con **LangChain, LangGraph y Gemma 3:1b**, ejecutado localmente con **Ollama**:
 
-## Ejecución local
+- **Calculadora y clima:** operaciones matemáticas y consultas de clima (simuladas si `CLIMA_REAL=false`).
+- **FAQ Mercado Libre:** consultas a una base documental local mediante RAG y recuperación BM25.
+- **Traductor:** traducción de textos entre idiomas.
 
-1. Descarga o clona este repositorio desde GitHub y abre una terminal en su carpeta.
-2. Instala Node.js 22.12+ y las dependencias:
+El frontend fue elaborado con **Lovable, React, TypeScript y Vite**. El backend utiliza **FastAPI** para comunicarse con los agentes de Python. **LangSmith es opcional** y sirve para registrar ejecuciones y evaluaciones. El historial visible en el frontend se guarda temporalmente en la memoria del navegador; se pierde al recargar la página.
 
-   ```sh
-   npm install
-   ```
+## Repositorios
 
-3. Crea `.env.local` en la raíz (no se sube a GitHub):
+| Componente | Repositorio |
+| --- | --- |
+| Backend: agentes Python + FastAPI | https://github.com/ricardocalderong97-hue/Agentes-Gemma-MercadoLibre-FAQ |
+| Frontend: interfaz web | https://github.com/ricardocalderong97-hue/pixel-perfect-match |
 
-   ```dotenv
-   VITE_API_URL=http://127.0.0.1:8000
-   ```
+> **Importante:** la aplicación usa un modelo **local**. No basta con abrir el proyecto en la vista previa de Lovable: para consultar los agentes, hay que ejecutar Ollama, el backend y el frontend en el mismo computador. Los datos de clima pueden ser simulados y la base FAQ no se actualiza automáticamente.
 
-   También puedes copiar `.env.example` a `.env.local`. Sin esta variable se utiliza la misma dirección por defecto. La URL es pública en el navegador: no añadas contraseñas o claves privadas.
+## 1. Requisitos previos — Windows
 
-4. Arranca tu backend Python y Ollama por separado, con el modelo Gemma 3:1b disponible. Este repositorio no modifica ni instala tu backend.
-5. Inicia la aplicación:
+Instala lo siguiente:
 
-   ```sh
-   npm run dev
-   ```
+1. **Git**: https://git-scm.com/downloads
+2. **Python** (recomendado: una versión compatible con `requirements.txt`; el proyecto se ha usado con Python 3.14): https://www.python.org/downloads/
+3. **Node.js 22.12 o superior** (incluye npm): https://nodejs.org/
+4. **Ollama**: https://ollama.com/download
+5. **Visual Studio Code** (recomendado): https://code.visualstudio.com/
 
-6. Abre en **tu computador** la dirección local que muestra Vite en la terminal. Si modificas `.env.local`, reinicia `npm run dev`.
+Abre VS Code y una terminal **PowerShell** (`Terminal > New Terminal`). Comprueba las instalaciones:
 
-## Vista previa de Lovable
-
-La vista previa remota sirve para revisar la interfaz, no para conectar con tu computador. Mientras `VITE_API_URL` apunte a localhost o 127.0.0.1, se bloquean las peticiones a `/salud` y `/preguntar` desde un dominio remoto. No se crean respuestas ficticias. Para usar tu modelo, ejecuta el proyecto localmente.
-
-## Contrato del backend
-
-`src/lib/api.ts` exporta `askAgent(agente, pregunta, origen='español', destino='inglés')`.
-
-```http
-POST /preguntar
-Content-Type: application/json
+```powershell
+python --version
+node --version
+npm --version
+git --version
+ollama --version
 ```
+
+Si algún comando no se reconoce, instala el programa correspondiente y reinicia VS Code.
+
+## 2. Descargar los dos repositorios
+
+En PowerShell, ve a la carpeta donde deseas guardar el proyecto. Por ejemplo:
+
+```powershell
+cd "$HOME\Documents"
+```
+
+Clona **ambos** repositorios:
+
+```powershell
+git clone https://github.com/ricardocalderong97-hue/Agentes-Gemma-MercadoLibre-FAQ.git
+git clone https://github.com/ricardocalderong97-hue/pixel-perfect-match.git
+```
+
+Al finalizar tendrás dos carpetas independientes:
+
+```text
+Documents/
+├── Agentes-Gemma-MercadoLibre-FAQ/   # Backend Python
+└── pixel-perfect-match/             # Frontend Lovable
+```
+
+## 3. Configurar el backend (Python)
+
+Entra al repositorio del backend:
+
+```powershell
+cd "$HOME\Documents\Agentes-Gemma-MercadoLibre-FAQ"
+```
+
+Crea el entorno virtual con la versión de Python instalada:
+
+```powershell
+python -m venv .venv
+```
+
+Actívalo:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Si PowerShell impide la activación, ejecuta **solo en esa terminal**:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+Instala las dependencias del proyecto y de la API:
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -r requirements_api.txt
+```
+
+### Archivo de configuración `.env`
+
+Crea una copia de la plantilla:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Abre `.env` en VS Code y asegúrate de que incluya estos valores (conserva cualquier otra variable necesaria de la plantilla):
+
+```dotenv
+OLLAMA_MODEL=gemma3:1b
+OLLAMA_BASE_URL=http://localhost:11434
+CLIMA_REAL=false
+LANGSMITH_TRACING=false
+LANGSMITH_PROJECT=agentes-gemma-mercadolibre
+```
+
+Para registrar trazas en **LangSmith**, crea una clave propia en https://smith.langchain.com y cambia/agrega:
+
+```dotenv
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=PEGA_AQUI_TU_CLAVE_PERSONAL
+```
+
+LangSmith **no es obligatorio** para usar la interfaz. **Nunca subas `.env` ni tu clave API a GitHub.**
+
+## 4. Descargar y ejecutar el modelo local
+
+Con Ollama instalado, abre una terminal PowerShell adicional y ejecuta:
+
+```powershell
+ollama pull gemma3:1b
+```
+
+Comprueba que aparece en la lista:
+
+```powershell
+ollama list
+```
+
+El servicio de Ollama debe estar ejecutándose. Si no se ha iniciado automáticamente, abre la aplicación Ollama o ejecuta `ollama serve` en una terminal propia (si no hay otro servicio ya escuchando en el mismo puerto).
+
+## 5. Iniciar FastAPI — Terminal 1
+
+Abre una terminal en la carpeta del **backend** y activa `.venv` si aún no lo está:
+
+```powershell
+cd "$HOME\Documents\Agentes-Gemma-MercadoLibre-FAQ"
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn api:app --host 127.0.0.1 --port 8000
+```
+
+Deberías ver:
+
+```text
+Uvicorn running on http://127.0.0.1:8000
+```
+
+**No cierres esta terminal.**
+
+Comprueba que el backend responde en:
+
+- Salud: http://127.0.0.1:8000/salud
+- Documentación y pruebas: http://127.0.0.1:8000/docs
+
+En `/docs`, selecciona `POST /preguntar` > **Try it out** y utiliza:
 
 ```json
 {
   "agente": "herramientas",
-  "pregunta": "¿Cuánto es el 18% de 2450?",
+  "pregunta": "¿Cuánto es (8+4)*3?",
   "origen": "español",
   "destino": "inglés"
 }
 ```
 
-Valores exactos de agente: `herramientas`, `rag`, `traductor`.
+La respuesta debe contener el resultado **36**. El endpoint devuelve `respuesta`, `detalles`, `fuentes` y `modelo`.
 
-Respuesta esperada:
+## 6. Configurar el frontend — Terminal 2
 
-```ts
-{
-  agente: 'herramientas' | 'rag' | 'traductor';
-  respuesta: string;
-  detalles: string[];
-  fuentes: string[];
-  modelo: string;
-}
+Abre **otra terminal** en VS Code (sin cerrar FastAPI) y entra a la carpeta del frontend:
+
+```powershell
+cd "$HOME\Documents\pixel-perfect-match"
 ```
 
-`GET /salud` debe devolver un estado HTTP satisfactorio y JSON válido. Se consulta al abrir localmente y al comprobar de nuevo la conexión. Las fuentes HTTP/HTTPS son enlaces; los detalles de herramientas que ya figuran en la respuesta no se repiten. El tiempo máximo por petición es de 120 segundos.
+Instala las dependencias. Como el repositorio incluye `package-lock.json`, utiliza:
 
-### CORS y solución de problemas
+```powershell
+npm ci
+```
 
-- Autoriza en el backend el **origen exacto** de Vite que ves en la terminal, por ejemplo `http://localhost:8080` o `http://localhost:5173`. `localhost` y `127.0.0.1` son orígenes distintos.
-- Para FastAPI, configura `CORSMiddleware` con esos orígenes, métodos `GET`, `POST`, `OPTIONS` y la cabecera `Content-Type`.
-- Si aparece un error de conexión, verifica `/salud`, el puerto Python, Ollama y CORS. El botón **Reintentar** vuelve a enviar la misma pregunta y los mismos idiomas sin duplicar el mensaje del usuario.
-- Si usas otro computador para Python, cambia `VITE_API_URL` por su IP de red y permite el origen del frontend; no uses una URL HTTPS para llamar a un backend HTTP sin considerar las restricciones del navegador.
+Crea la configuración local del frontend:
 
-## Estructura y comandos
+```powershell
+Copy-Item .env.example .env.local
+```
 
-- `src/routes/index.tsx`: estudio y estado de conversaciones en memoria.
-- `src/lib/agents.ts`: agentes e idiomas.
-- `src/lib/api.ts`: peticiones de navegador y validación de conexión.
-- `src/styles.css`: sistema visual y adaptación a pantallas pequeñas.
-- `npm test`: pruebas de contrato API, conexión y navegación.
-- `npm run build`: compilación de la aplicación.
+Abre `.env.local` y confirma que contiene:
 
-La plantilla de Lovable conserva React + TypeScript + Vite y TanStack Start como infraestructura obligatoria. La lógica del estudio es exclusivamente frontend: ninguna petición al modelo se ejecuta en servidor ni se implementan funciones de backend. No es una plantilla Vite SPA independiente.
+```dotenv
+VITE_API_URL=http://127.0.0.1:8000
+```
+
+Inicia la interfaz:
+
+```powershell
+npm run dev
+```
+
+Abre en el navegador la dirección **Local** indicada por Vite, normalmente:
+
+http://localhost:8080/
+
+**No cierres la terminal de Vite.** Deja abiertas las dos terminales (FastAPI y Vite) mientras utilizas la aplicación; Ollama también debe seguir funcionando.
+
+## 7. Probar los tres agentes
+
+Desde la interfaz web, selecciona cada sección y realiza una prueba:
+
+| Sección | Consulta de prueba | Resultado esperado |
+| --- | --- | --- |
+| Calculadora y clima | `¿Cuánto es (8+4)*3?` | `36` |
+| Calculadora y clima | `¿Qué clima hace en Cali?` | Respuesta identificada como **simulada** si `CLIMA_REAL=false` |
+| FAQ Mercado Libre | `¿Puedo pagar usando Nequi o Daviplata?` | Respuesta basada en las FAQ locales; puede mencionar PSE y mostrar fuentes |
+| Traductor (español → inglés) | `El presupuesto del proyecto debe estar listo mañana.` | Traducción al inglés |
+
+Las respuestas del RAG dependen de la **base local** incluida en el backend: no constituyen información en tiempo real ni garantizan que las políticas comerciales actuales sean las mismas.
+
+## 8. Cómo volver a ejecutar la aplicación otro día
+
+**No necesitas reinstalar las dependencias** si ya están instaladas.
+
+1. Abre Ollama o comprueba que sigue activo.
+2. Abre la carpeta del backend en VS Code, activa `.venv` y ejecuta:
+
+   ```powershell
+   python -m uvicorn api:app --host 127.0.0.1 --port 8000
+   ```
+
+3. Abre el frontend en otra ventana/terminal de VS Code y ejecuta:
+
+   ```powershell
+   npm run dev
+   ```
+
+4. Abre `http://localhost:8080/` o el puerto que indique Vite.
+
+También existe `INICIAR_API.bat` dentro del backend para iniciar su API en Windows.
+
+## 9. Problemas frecuentes
+
+**`python` o `node` no se reconoce.** Comprueba que están instalados y reinicia la terminal. En algunos equipos Windows se usa `py` en lugar de `python`.
+
+**PowerShell bloquea `Activate.ps1`.** Ejecuta `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` únicamente en esa terminal y vuelve a activar el entorno.
+
+**`ollama` no se reconoce / no conecta.** Instala Ollama, comprueba `ollama list`, confirma que `gemma3:1b` está descargado y que el servicio está activo.
+
+**Error `Failed to fetch`, `ERR_CONNECTION_REFUSED` o “desconectado”.** Comprueba que FastAPI siga funcionando en `http://127.0.0.1:8000/salud`, que Vite esté abierto, y que `VITE_API_URL` apunte al puerto correcto. Reinicia `npm run dev` si modificaste `.env.local`.
+
+**Error de CORS.** El backend debe autorizar el origen exacto usado por el frontend, por ejemplo `http://localhost:8080`. `localhost` y `127.0.0.1` no son el mismo origen. Revisa la configuración de CORS en `api.py` si Vite se inició con otro puerto.
+
+**La vista previa de Lovable no responde.** Es normal que la vista previa remota no pueda acceder directamente a `127.0.0.1` de tu computador. Ejecuta el frontend **localmente**.
+
+**Aparecen avisos de npm o dependencias obsoletas.** No ejecutes `npm audit fix --force` sin revisar los posibles cambios incompatibles; comprueba primero con `npm audit`.
+
+**Tildes incorrectas al imprimir README en PowerShell.** Puede ser un problema de codificación de la consola; no implica necesariamente que el archivo Markdown esté dañado. Ábrelo directamente en VS Code o GitHub.
+
+## 10. Arquitectura y funcionamiento
+
+```text
+Navegador (Gemma Agent Studio / React)
+            |
+            | POST /preguntar
+            v
+FastAPI (Python, puerto 8000)
+            |
+            +---- Calculadora y clima
+            +---- RAG FAQ Mercado Libre
+            +---- Traductor
+            |
+            v
+Ollama / Gemma 3:1b (local)
+            |
+            +---- LangSmith (opcional: trazas y evaluaciones)
+```
+
+El frontend envía peticiones al backend mediante `src/lib/api.ts`, que expone `askAgent(agente, pregunta, origen, destino)`. Los identificadores de agente aceptados por la API son `herramientas`, `rag` y `traductor`.
+
+- `GET /salud`: comprueba el estado del backend.
+- `GET /agentes`: lista los agentes disponibles.
+- `POST /preguntar`: ejecuta la consulta y devuelve una respuesta estructurada.
+
+Los componentes de software se ejecutan **localmente**, excepto la plataforma LangSmith cuando se activa el registro en la nube. El proyecto no requiere una API comercial de inferencia.
+
+## 11. Pruebas técnicas opcionales
+
+Backend, desde la carpeta del proyecto Python:
+
+```powershell
+python evaluar.py
+```
+
+Frontend, desde la carpeta `pixel-perfect-match`:
+
+```powershell
+npm test
+npm run build
+```
+
+La evaluación académica del RAG reportó **4/4 respuestas que cumplieron criterios específicos** en un conjunto pequeño de cuatro preguntas. No debe interpretarse como precisión general del sistema.
+
+## 12. Notas de seguridad
+
+- Los archivos `.env` y `.env.local` contienen configuraciones locales; las claves privadas nunca deben incluirse en el repositorio.
+- `VITE_API_URL` es visible para el navegador y **no** debe contener secretos.
+- El backend local de ejemplo no incorpora autenticación. No lo expongas directamente a Internet sin aplicar medidas de seguridad adicionales.
+- El proyecto está destinado a fines académicos y demostraciones locales.
