@@ -28,3 +28,8 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Application architecture
+- Keep the TanStack Start/Vite bootstrap required by the platform; all agent requests are browser-only calls to the existing external Python API, so no model logic or backend proxy is added.
+- Keep independent agent conversations in React session memory and centralize the API contract and local-origin guard in src/lib/api.ts, preventing accidental remote-preview requests to loopback hosts.
+- Use src/styles.css semantic tokens and shared UI controls for the studio, keeping agent appearance and responsive behavior consistent.
